@@ -19,7 +19,8 @@ import {
   Building2,
   Plus,
   MapPin,
-  Tag
+  Tag,
+  FilePenLine
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -55,6 +56,15 @@ interface Booking {
   };
 }
 
+interface User {
+  id: string;
+  company_name: string;
+  rfc: string;
+  industry: string;
+  city: string;
+  created_at: string;
+}
+
 export const AdminDashboard = () => {
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
@@ -71,10 +81,21 @@ export const AdminDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [activeView, setActiveView] = useState<'overview' | 'users' | 'bookings' | 'payments'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [activeColUsersBookings, setActiveColUsersBookings] = useState(true);
+  const [activeColCodeBookings, setActiveColCodeBookings] = useState(true);
+  const [activeColHotelBookings, setActiveColHotelsBookings] = useState(true);
+  const [activeColDateBookings, setActiveColDateBookings] = useState(true);
+  const [activeColPriceBookings, setActiveColPriceBookings] = useState(true);
+  const [activeColStatusBookings, setActiveColStatusBookings] = useState(true);
+  const [activeColActionsBookings, setActiveColActionsBookings] = useState(false);
   const [showNewBookingModal, setShowNewBookingModal] = useState(false);
   const [newBooking, setNewBooking] = useState({
     hotel_name: '',
@@ -97,8 +118,14 @@ export const AdminDashboard = () => {
   }, [activeView]);
 
   useEffect(() => {
+    if (activeView === 'users') {
+      fetchUsers();
+    }
+  }, [activeView]);
+
+  useEffect(() => {
     filterBookings();
-  }, [searchTerm, statusFilter, bookings]);
+  }, [searchTerm, statusFilter, bookings, dateEnd, dateStart]);
 
   const filterBookings = () => {
     let filtered = [...bookings];
@@ -106,7 +133,7 @@ export const AdminDashboard = () => {
     // Filter by search term
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(booking => 
+      filtered = filtered.filter(booking =>
         booking.hotel_name.toLowerCase().includes(searchLower) ||
         booking.confirmation_code.toLowerCase().includes(searchLower) ||
         booking.user?.email.toLowerCase().includes(searchLower)
@@ -118,21 +145,26 @@ export const AdminDashboard = () => {
       filtered = filtered.filter(booking => booking.status === statusFilter);
     }
 
+    if (dateEnd != "" && dateStart != "") {
+      filtered = filtered.filter(booking => Date.parse(booking.check_in) >= Date.parse(dateStart) && Date.parse(booking.check_out) <= Date.parse(dateEnd));
+    }
+
     setFilteredBookings(filtered);
   };
 
   const fetchBookings = async () => {
     try {
+      const { data: user, error: userError } = await supabase.auth.getUser();
+
+      if (userError) {
+        throw userError;
+      }
+      if (!user) {
+        throw new Error("No hay usuario autenticado.");
+      }
       const { data: bookingsData, error } = await supabase
         .from('bookings')
-        .select(`
-          *,
-          user:user_id (
-            email,
-            user_metadata
-          )
-        `)
-        .order('created_at', { ascending: false });
+        .select("*");
 
       if (error) throw error;
       setBookings(bookingsData || []);
@@ -141,6 +173,26 @@ export const AdminDashboard = () => {
       console.error('Error fetching bookings:', error);
     }
   };
+
+  const fetchUsers = async () => {
+    try {
+      const { data: user, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        throw userError;
+      }
+      if (!user) {
+        throw new Error("No hay usuario autenticado");
+      }
+      const { data: userData, error } = await supabase
+        .from('company_profiles')
+        .select("*");
+      if (error) throw error;
+      setUsers(userData || []);
+      setFilteredUsers(userData || []);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    }
+  }
 
   const handleCreateBooking = async () => {
     try {
@@ -192,7 +244,7 @@ export const AdminDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setIsRefreshing(true);
-      
+
       // Fetch total users
       const { count: userCount } = await supabase
         .from('company_profiles')
@@ -306,44 +358,40 @@ export const AdminDashboard = () => {
         <div className="flex space-x-4 mb-8">
           <button
             onClick={() => setActiveView('overview')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
-              activeView === 'overview'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-50'
-            }`}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${activeView === 'overview'
+              ? 'bg-blue-600 text-white'
+              : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
           >
             <BarChart3 className="w-5 h-5" />
             <span>Vista General</span>
           </button>
           <button
             onClick={() => setActiveView('users')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
-              activeView === 'users'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-50'
-            }`}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${activeView === 'users'
+              ? 'bg-blue-600 text-white'
+              : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
           >
             <Users className="w-5 h-5" />
             <span>Usuarios</span>
           </button>
           <button
             onClick={() => setActiveView('bookings')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
-              activeView === 'bookings'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-50'
-            }`}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${activeView === 'bookings'
+              ? 'bg-blue-600 text-white'
+              : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
           >
             <Hotel className="w-5 h-5" />
             <span>Reservaciones</span>
           </button>
           <button
             onClick={() => setActiveView('payments')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
-              activeView === 'payments'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-50'
-            }`}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${activeView === 'payments'
+              ? 'bg-blue-600 text-white'
+              : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
           >
             <CreditCard className="w-5 h-5" />
             <span>Pagos</span>
@@ -472,13 +520,12 @@ export const AdminDashboard = () => {
                           </p>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            booking.status === 'completed'
-                              ? 'bg-green-100 text-green-800'
-                              : booking.status === 'pending'
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${booking.status === 'completed'
+                            ? 'bg-green-100 text-green-800'
+                            : booking.status === 'pending'
                               ? 'bg-yellow-100 text-yellow-800'
                               : 'bg-red-100 text-red-800'
-                          }`}>
+                            }`}>
                             {booking.status === 'completed' ? (
                               <CheckCircle className="w-4 h-4 mr-1" />
                             ) : booking.status === 'pending' ? (
@@ -517,13 +564,12 @@ export const AdminDashboard = () => {
                         </p>
                       </div>
                       <div className="flex items-center space-x-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          payment.status === 'completed'
-                            ? 'bg-green-100 text-green-800'
-                            : payment.status === 'pending'
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${payment.status === 'completed'
+                          ? 'bg-green-100 text-green-800'
+                          : payment.status === 'pending'
                             ? 'bg-yellow-100 text-yellow-800'
                             : 'bg-red-100 text-red-800'
-                        }`}>
+                          }`}>
                           {payment.status}
                         </span>
                         <span className="font-medium text-gray-900">
@@ -542,7 +588,7 @@ export const AdminDashboard = () => {
         {activeView === 'users' && (
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-gray-900">Gestión de Usuarios</h3>
                 <div className="flex items-center space-x-4">
                   <div className="relative">
@@ -565,8 +611,31 @@ export const AdminDashboard = () => {
                   </button>
                 </div>
               </div>
+              {/* User list would go here */}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-left border-b border-gray-200">
+                      <th className="pb-3 font-semibold text-gray-600">Compañia</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-gray-50">
+                        <td className="py-4">
+                          <div className="flex items-center space-x-2">
+                            <Building2 className="w-4 h-4 text-gray-400" />
+                            <span className="font-medium">{user.company_name}</span>
+                          </div>
+                        </td>
+
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            {/* User list would go here */}
+
           </div>
         )}
 
@@ -575,8 +644,8 @@ export const AdminDashboard = () => {
           <div className="space-y-6">
             {/* Filters and Actions */}
             <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-4">
+              <div className="flex items-center justify-between mb-6 flex-wrap space-y-2">
+                <div className="flex items-center gap-x-4 gap-y-3 flex-wrap">
                   <div className="relative">
                     <input
                       type="text"
@@ -586,6 +655,26 @@ export const AdminDashboard = () => {
                       className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                     <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                  </div>
+                  <div className="flex-row flex justify-center items-center relative gap-x-3">
+                    <p>Fecha de inicio</p>
+                    <input
+                      type="date"
+                      placeholder="Ingresa fecha de fin"
+                      value={dateStart}
+                      onChange={(e) => setDateStart(e.target.value)}
+                      className="pl-5 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="flex-row flex justify-center items-center relative gap-x-3">
+                    <p>Fecha de fin</p>
+                    <input
+                      type="date"
+                      placeholder="Ingresa fecha de fin"
+                      value={dateEnd}
+                      onChange={(e) => setDateEnd(e.target.value)}
+                      className="pl-5 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
                   </div>
                   <select
                     value={statusFilter}
@@ -613,66 +702,146 @@ export const AdminDashboard = () => {
                 </div>
               </div>
 
+              {/* Filtering columns */}
+              <p className='text-xl leading-relaxed mb-4'>Filtra por columnas</p>
+              <div className='flex items-center justify-start gap-x-6 gap-y-3 mb-6 flex-wrap'>
+                <button
+                  onClick={() => setActiveColCodeBookings(!activeColCodeBookings)}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg border-slate-200 border-2 ${activeColCodeBookings
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                  <Tag className="w-5 h-5" />
+                  <span>Código</span>
+                </button>
+                <button
+                  onClick={() => setActiveColHotelsBookings(!activeColHotelBookings)}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg border-slate-200 border-2 ${activeColHotelBookings
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                  <Hotel className="w-5 h-5" />
+                  <span>Hotel</span>
+                </button>
+                <button
+                  onClick={() => setActiveColUsersBookings(!activeColUsersBookings)}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg border-slate-200 border-2 ${activeColUsersBookings
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                  <Users className="w-5 h-5" />
+                  <span>Usuario</span>
+                </button>
+                <button
+                  onClick={() => setActiveColDateBookings(!activeColDateBookings)}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg border-slate-200 border-2 ${activeColDateBookings
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                  <Calendar className="w-5 h-5" />
+                  <span>Fechas</span>
+                </button>
+                <button
+                  onClick={() => setActiveColPriceBookings(!activeColPriceBookings)}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg border-slate-200 border-2 ${activeColPriceBookings
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                  <DollarSign className="w-5 h-5" />
+                  <span>Precio</span>
+                </button>
+                <button
+                  onClick={() => setActiveColStatusBookings(!activeColStatusBookings)}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg border-slate-200 border-2 ${activeColStatusBookings
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                  <Clock className="w-5 h-5" />
+                  <span>Estado</span>
+                </button>
+                <button
+                  onClick={() => setActiveColActionsBookings(!activeColActionsBookings)}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg border-slate-200 border-2 ${activeColActionsBookings
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                  <FilePenLine className="w-5 h-5" />
+                  <span>Acciones</span>
+                </button>
+
+              </div>
+
               {/* Bookings Table */}
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="text-left border-b border-gray-200">
-                      <th className="pb-3 font-semibold text-gray-600">Código</th>
-                      <th className="pb-3 font-semibold text-gray-600">Hotel</th>
-                      <th className="pb-3 font-semibold text-gray-600">Usuario</th>
-                      <th className="pb-3 font-semibold text-gray-600">Fechas</th>
-                      <th className="pb-3 font-semibold text-gray-600">Precio</th>
-                      <th className="pb-3 font-semibold text-gray-600">Estado</th>
-                      <th className="pb-3 font-semibold text-gray-600">Acciones</th>
+                      {activeColCodeBookings && <th className="pb-3 font-semibold text-gray-600">Código</th>}
+                      {activeColHotelBookings && <th className="pb-3 font-semibold text-gray-600">Hotel</th>}
+                      {activeColUsersBookings && <th className="pb-3 font-semibold text-gray-600">Usuario</th>}
+                      {activeColDateBookings && <th className="pb-3 font-semibold text-gray-600">Fechas</th>}
+                      {activeColPriceBookings && <th className="pb-3 font-semibold text-gray-600">Precio</th>}
+                      {activeColStatusBookings && <th className="pb-3 font-semibold text-gray-600">Estado</th>}
+                      {activeColActionsBookings && <th className="pb-3 font-semibold text-gray-600">Acciones</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {filteredBookings.map((booking) => (
                       <tr key={booking.id} className="hover:bg-gray-50">
-                        <td className="py-4">
-                          <div className="flex items-center space-x-2">
-                            <Tag className="w-4 h-4 text-gray-400" />
-                            <span className="font-medium">{booking.confirmation_code}</span>
-                          </div>
-                        </td>
-                        <td className="py-4">
-                          <div className="flex items-center space-x-2">
-                            <Hotel className="w-4 h-4 text-gray-400" />
-                            <span>{booking.hotel_name}</span>
-                          </div>
-                        </td>
-                        <td className="py-4">
-                          <div className="flex items-center space-x-2">
-                            <Users className="w-4 h-4 text-gray-400" />
-                            <span>{booking.user?.email}</span>
-                          </div>
-                        </td>
-                        <td className="py-4">
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="w-4 h-4 text-gray-400" />
-                            <span>
-                              {new Date(booking.check_in).toLocaleDateString()} - 
-                              {new Date(booking.check_out).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-4">
-                          <div className="flex items-center space-x-2">
-                            <DollarSign className="w-4 h-4 text-gray-400" />
-                            <span className="font-medium">
-                              ${booking.total_price.toLocaleString()}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-4">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            booking.status === 'completed'
-                              ? 'bg-green-100 text-green-800'
-                              : booking.status === 'pending'
+                        {activeColCodeBookings &&
+                          <td className="py-4">
+                            <div className="flex items-center space-x-2">
+                              <Tag className="w-4 h-4 text-gray-400" />
+                              <span className="font-medium">{booking.confirmation_code}</span>
+                            </div>
+                          </td>}
+                        {activeColHotelBookings &&
+                          <td className="py-4">
+                            <div className="flex items-center space-x-2">
+                              <Hotel className="w-4 h-4 text-gray-400" />
+                              <span>{booking.hotel_name}</span>
+                            </div>
+                          </td>}
+                        {activeColUsersBookings &&
+                          <td className="py-4">
+                            <div className="flex items-center space-x-2">
+                              <Users className="w-4 h-4 text-gray-400" />
+                              <span>{booking.user?.email}</span>
+                            </div>
+                          </td>}
+                        {activeColDateBookings &&
+                          <td className="py-4">
+                            <div className="flex items-center space-x-2">
+                              <Calendar className="w-4 h-4 text-gray-400" />
+                              <span>
+                                {new Date(booking.check_in).toLocaleDateString()} -
+                                {new Date(booking.check_out).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </td>}
+                        {activeColPriceBookings &&
+                          <td className="py-4">
+                            <div className="flex items-center space-x-2">
+                              <DollarSign className="w-4 h-4 text-gray-400" />
+                              <span className="font-medium">
+                                ${booking.total_price.toLocaleString()}
+                              </span>
+                            </div>
+                          </td>}
+                        {activeColStatusBookings && <td className="py-4">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${booking.status === 'completed'
+                            ? 'bg-green-100 text-green-800'
+                            : booking.status === 'pending'
                               ? 'bg-yellow-100 text-yellow-800'
                               : 'bg-red-100 text-red-800'
-                          }`}>
+                            }`}>
                             {booking.status === 'completed' ? (
                               <CheckCircle className="w-4 h-4 mr-1" />
                             ) : booking.status === 'pending' ? (
@@ -682,20 +851,21 @@ export const AdminDashboard = () => {
                             )}
                             {booking.status}
                           </span>
-                        </td>
-                        <td className="py-4">
-                          <div className="flex items-center space-x-2">
-                            <select
-                              value={booking.status}
-                              onChange={(e) => handleUpdateBookingStatus(booking.id, e.target.value)}
-                              className="px-2 py-1 border border-gray-300 rounded text-sm"
-                            >
-                              <option value="pending">Pendiente</option>
-                              <option value="completed">Completada</option>
-                              <option value="cancelled">Cancelada</option>
-                            </select>
-                          </div>
-                        </td>
+                        </td>}
+                        {activeColActionsBookings &&
+                          <td className="py-4">
+                            <div className="flex items-center space-x-2">
+                              <select
+                                value={booking.status}
+                                onChange={(e) => handleUpdateBookingStatus(booking.id, e.target.value)}
+                                className="px-2 py-1 border border-gray-300 rounded text-sm"
+                              >
+                                <option value="pending">Pendiente</option>
+                                <option value="completed">Completada</option>
+                                <option value="cancelled">Cancelada</option>
+                              </select>
+                            </div>
+                          </td>}
                       </tr>
                     ))}
                   </tbody>
@@ -717,3 +887,7 @@ export const AdminDashboard = () => {
                       type="text"
                       placeholder="Buscar pagos..."
                       value={searchTerm}
+                    />
+                  </div></div></div>
+            </div></div>)}</div></div>)
+}
